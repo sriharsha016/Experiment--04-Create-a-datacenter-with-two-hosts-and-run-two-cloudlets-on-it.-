@@ -76,249 +76,129 @@ To create a datacenter with two hosts and execute two cloudlets on virtual machi
 
 ## Program File
 
-/*
- * Title:        CloudSim Toolkit
- * Description:  CloudSim (Cloud Simulation) Toolkit for Modeling and Simulation
- *               of Clouds
- * Licence:      GPL - http://www.gnu.org/copyleft/gpl.html
- *
- * Copyright (c) 2009, The University of Melbourne, Australia
- */
-
-package org.cloudbus.cloudsim.examples;
-
 import org.cloudbus.cloudsim.*;
 import org.cloudbus.cloudsim.core.CloudSim;
-import org.cloudbus.cloudsim.provisioners.BwProvisionerSimple;
-import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
-import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
+import org.cloudbus.cloudsim.provisioners.*;
 
-import java.text.DecimalFormat;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 
+public class DifferentMipsExample {
 
-/**
- * A simple example showing how to create
- * a datacenter with two hosts and run two
- * cloudlets on it. The cloudlets run in
- * VMs with different MIPS requirements.
- * The cloudlets will take different time
- * to complete the execution depending on
- * the requested VM performance.
- */
-public class CloudSimExample3 {
-	public static DatacenterBroker broker;
+    public static void main(String[] args) {
 
-	/** The cloudlet list. */
-	private static List<Cloudlet> cloudletList;
+        try {
+            // Initialize CloudSim
+            CloudSim.init(1, Calendar.getInstance(), false);
 
-	/** The vmlist. */
-	private static List<Vm> vmlist;
+            // Create Datacenter
+            Datacenter datacenter = createDatacenter("Datacenter_0");
 
-	/**
-	 * Creates main() to run this example
-	 */
-	public static void main(String[] args) {
+            // Create Broker
+            DatacenterBroker broker = new DatacenterBroker("Broker");
+            int brokerId = broker.getId();
 
-		Log.println("Starting CloudSimExample3...");
+            // Create VMs with DIFFERENT MIPS
+            List<Vm> vmList = new ArrayList<>();
 
-		try {
-			// First step: Initialize the CloudSim package. It should be called
-			// before creating any entities.
-			int num_user = 1;   // number of cloud users
-			Calendar calendar = Calendar.getInstance();
-			boolean trace_flag = false;  // mean trace events
+            Vm vm1 = new Vm(0, brokerId, 250, 1, 512, 1000, 10000,
+                    "Xen", new CloudletSchedulerTimeShared());
 
-			// Initialize the CloudSim library
-			CloudSim.init(num_user, calendar, trace_flag);
+            Vm vm2 = new Vm(1, brokerId, 500, 1, 512, 1000, 10000,
+                    "Xen", new CloudletSchedulerTimeShared());
 
-			// Second step: Create Datacenters
-			//Datacenters are the resource providers in CloudSim. We need at list one of them to run a CloudSim simulation
-			Datacenter datacenter0 = createDatacenter("Datacenter_0");
+            vmList.add(vm1);
+            vmList.add(vm2);
+            broker.submitVmList(vmList);
 
-			//Third step: Create Broker
-			broker = new DatacenterBroker("Broker");
-			int brokerId = broker.getId();
+            // Create Cloudlets (same workload)
+            List<Cloudlet> cloudletList = new ArrayList<>();
 
-			//Fourth step: Create one virtual machine
-			vmlist = new ArrayList<>();
+            UtilizationModel utilization = new UtilizationModelFull();
 
-			//VM description
-			int mips = 250;
-			long size = 10000; //image size (MB)
-			int ram = 2048; //vm memory (MB)
-			long bw = 1000;
-			int pesNumber = 1; //number of cpus
-			String vmm = "Xen"; //VMM name
+            Cloudlet cloudlet1 = new Cloudlet(0, 40000, 1,
+                    300, 300, utilization, utilization, utilization);
 
-			//create two VMs
-			Vm vm1 = new Vm(brokerId, mips, pesNumber, ram, bw, size, vmm, new CloudletSchedulerTimeShared());
-			//the second VM will have twice the priority of VM1 and so will receive twice CPU time
-			Vm vm2 = new Vm(brokerId, mips * 2, pesNumber, ram, bw, size, vmm, new CloudletSchedulerTimeShared());
+            Cloudlet cloudlet2 = new Cloudlet(1, 40000, 1,
+                    300, 300, utilization, utilization, utilization);
 
-			//add the VMs to the vmList
-			vmlist.add(vm1);
-			vmlist.add(vm2);
+            cloudlet1.setUserId(brokerId);
+            cloudlet2.setUserId(brokerId);
 
-			//submit vm list to the broker
-			broker.submitGuestList(vmlist);
+            cloudlet1.setVmId(0);
+            cloudlet2.setVmId(1);
 
+            cloudletList.add(cloudlet1);
+            cloudletList.add(cloudlet2);
 
-			//Fifth step: Create two Cloudlets
-			cloudletList = new ArrayList<>();
+            broker.submitCloudletList(cloudletList);
 
-			//Cloudlet properties
-			long length = 40000;
-			long fileSize = 300;
-			long outputSize = 300;
-			UtilizationModel utilizationModel = new UtilizationModelFull();
+            // Run Simulation
+            CloudSim.startSimulation();
 
-			Cloudlet cloudlet1 = new Cloudlet(length, pesNumber, fileSize, outputSize, utilizationModel, utilizationModel, utilizationModel);
-			cloudlet1.setUserId(brokerId);
+            List<Cloudlet> resultList = broker.getCloudletReceivedList();
 
-			Cloudlet cloudlet2 = new Cloudlet(length, pesNumber, fileSize, outputSize, utilizationModel, utilizationModel, utilizationModel);
-			cloudlet2.setUserId(brokerId);
+            CloudSim.stopSimulation();
 
-			//add the cloudlets to the list
-			cloudletList.add(cloudlet1);
-			cloudletList.add(cloudlet2);
+            printResults(resultList);
 
-			//submit cloudlet list to the broker
-			broker.submitCloudletList(cloudletList);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
+    // ================= DATACENTER =================
+    private static Datacenter createDatacenter(String name) throws Exception {
 
-			//bind the cloudlets to the vms. This way, the broker
-			// will submit the bound cloudlets only to the specific VM
-			broker.bindCloudletToVm(cloudlet1.getCloudletId(),vm1.getId());
-			broker.bindCloudletToVm(cloudlet2.getCloudletId(),vm2.getId());
+        List<Host> hostList = new ArrayList<>();
 
-			// Sixth step: Starts the simulation
-			CloudSim.startSimulation();
+        // Create TWO hosts
+        for (int i = 0; i < 2; i++) {
 
+            List<Pe> peList = new ArrayList<>();
+            peList.add(new Pe(0, new PeProvisionerSimple(3000)));
 
-			// Final step: Print results when simulation is over
-			List<Cloudlet> newList = broker.getCloudletReceivedList();
+            Host host = new Host(
+                    i,
+                    new RamProvisionerSimple(4096),
+                    new BwProvisionerSimple(10000),
+                    1000000,
+                    peList,
+                    new VmSchedulerTimeShared(peList)
+            );
 
-			CloudSim.stopSimulation();
+            hostList.add(host);
+        }
 
-        	printCloudletList(newList);
+        DatacenterCharacteristics characteristics =
+                new DatacenterCharacteristics(
+                        "x86", "Linux", "Xen",
+                        hostList, 10.0, 3.0,
+                        0.05, 0.1, 0.1);
 
+        return new Datacenter(
+                name,
+                characteristics,
+                new VmAllocationPolicySimple(hostList),
+                new LinkedList<>(),
+                0);
+    }
 
-		}
-		catch (Exception e) {
-			e.printStackTrace();
-			Log.println("The simulation has been terminated due to an unexpected error");
-		}
-	}
+    // ================= PRINT RESULTS =================
+    private static void printResults(List<Cloudlet> list) {
 
-	private static Datacenter createDatacenter(String name){
+        System.out.println("\n========== OUTPUT ==========");
+        System.out.println("Cloudlet | VM | Status | ExecTime | Start | Finish");
 
-		// Here are the steps needed to create a PowerDatacenter:
-		// 1. We need to create a list to store
-		//    our machine
-		List<Host> hostList = new ArrayList<>();
-
-		// 2. A Machine contains one or more PEs or CPUs/Cores.
-		// In this example, it will have only one core.
-		List<Pe> peList = new ArrayList<>();
-
-		int mips = 1000;
-
-		// 3. Create PEs and add these into a list.
-		peList.add(new Pe(0, new PeProvisionerSimple(mips))); // need to store Pe id and MIPS Rating
-
-		//4. Create Hosts with its id and list of PEs and add them to the list of machines
-		int ram = 2048; //host memory (MB)
-		long storage = 1000000; //host storage
-		int bw = 10000;
-
-		hostList.add(
-    			new Host(
-    				new RamProvisionerSimple(ram),
-    				new BwProvisionerSimple(bw),
-    				storage,
-    				peList,
-    				new VmSchedulerTimeShared(peList)
-    			)
-    		); // This is our first machine
-
-		//create another machine in the Data center
-		List<Pe> peList2 = new ArrayList<>();
-
-		peList2.add(new Pe(new PeProvisionerSimple(mips)));
-
-		hostList.add(
-    			new Host(
-    				new RamProvisionerSimple(ram),
-    				new BwProvisionerSimple(bw),
-    				storage,
-    				peList2,
-    				new VmSchedulerTimeShared(peList2)
-    			)
-    		); // This is our second machine
-
-
-
-		// 5. Create a DatacenterCharacteristics object that stores the
-		//    properties of a data center: architecture, OS, list of
-		//    Machines, allocation policy: time- or space-shared, time zone
-		//    and its price (G$/Pe time unit).
-		String arch = "x86";      // system architecture
-		String os = "Linux";          // operating system
-		String vmm = "Xen";
-		double time_zone = 10.0;         // time zone this resource located
-		double cost = 3.0;              // the cost of using processing in this resource
-		double costPerMem = 0.05;		// the cost of using memory in this resource
-		double costPerStorage = 0.001;	// the cost of using storage in this resource
-		double costPerBw = 0.0;			// the cost of using bw in this resource
-		LinkedList<Storage> storageList = new LinkedList<>();	//we are not adding SAN devices by now
-
-        DatacenterCharacteristics characteristics = new DatacenterCharacteristics(
-                arch, os, vmm, hostList, time_zone, cost, costPerMem, costPerStorage, costPerBw);
-
-		// 6. Finally, we need to create a PowerDatacenter object.
-		Datacenter datacenter = null;
-		try {
-			datacenter = new Datacenter(name, characteristics, new VmAllocationPolicySimple(hostList), storageList, 0);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		return datacenter;
-	}
-
-	/**
-	 * Prints the Cloudlet objects
-	 * @param list  list of Cloudlets
-	 */
-	private static void printCloudletList(List<Cloudlet> list) {
-		int size = list.size();
-		Cloudlet cloudlet;
-
-		String indent = "    ";
-		Log.println();
-		Log.println("========== OUTPUT ==========");
-		Log.println("Cloudlet ID" + indent + "STATUS" + indent +
-				"Data center ID" + indent + "VM ID" + indent + "Time" + indent + "Start Time" + indent + "Finish Time");
-
-		DecimalFormat dft = new DecimalFormat("###.##");
-		for (Cloudlet value : list) {
-			cloudlet = value;
-			Log.print(indent + cloudlet.getCloudletId() + indent + indent);
-
-			if (cloudlet.getStatus() == Cloudlet.CloudletStatus.SUCCESS) {
-				Log.print("SUCCESS");
-
-				Log.println(indent + indent + cloudlet.getResourceId() + indent + indent + indent + cloudlet.getGuestId() +
-						indent + indent + dft.format(cloudlet.getActualCPUTime()) + indent + indent + dft.format(cloudlet.getExecStartTime()) +
-						indent + indent + dft.format(cloudlet.getExecFinishTime()));
-			}
-		}
-
-	}
+        for (Cloudlet cl : list) {
+            System.out.printf("%5d\t%3d\t%s\t%.2f\t%.2f\t%.2f\n",
+                    cl.getCloudletId(),
+                    cl.getVmId(),
+                    cl.getStatus() == Cloudlet.SUCCESS ? "SUCCESS" : "FAILED",
+                    cl.getActualCPUTime(),
+                    cl.getExecStartTime(),
+                    cl.getFinishTime());
+        }
+    }
 }
 
 
@@ -347,7 +227,7 @@ Execution Time = Cloudlet Length / VM MIPS
 
 ## Sample Output
 
-<img width="1673" height="554" alt="image" src="https://github.com/user-attachments/assets/6ed2f790-90a2-4b37-90a3-f431b811c266" />
+<img width="1026" height="565" alt="image" src="https://github.com/user-attachments/assets/26494e6c-4323-43ea-bd3f-4302867ef9e7" />
 
 ---
 
